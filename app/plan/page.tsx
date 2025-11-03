@@ -1,5 +1,6 @@
 "use client";
 import PlanForm from "@/components/PlanForm";
+export const dynamic = "force-dynamic";
 
 export default function PlanPage() {
   return (

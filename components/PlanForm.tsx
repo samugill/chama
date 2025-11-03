@@ -20,10 +20,9 @@ export default function PlanForm() {
   const tier = getUserPlan().tier;                       // ← 현재 요금제
   const maxUnique = tier === "premium" ? 7 : 3;          // ← 고유 방법 제한
 
-  // 유혹 선택 시 기본 풀 힌트
-  const hintPool = useMemo(() => {
+ const hintPool = useMemo(() => {
     const key = PRESETS.includes(keyword) ? keyword : "기본";
-    return METHOD_POOLS[key] || METHOD_POOLS["기본"];
+    return (METHOD_POOLS?.[key] || METHOD_POOLS?.["기본"] || []);
   }, [keyword]);
 
   const genPreview = () => {
@@ -115,7 +114,7 @@ export default function PlanForm() {
         <div className="bg-gray-50 rounded-xl p-4">
           <div className="h2 mb-2">추천 힌트({PRESETS.includes(keyword)?keyword:"기본"})</div>
           <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-            {hintPool.map((m,i)=><li key={i}>{m}</li>)}
+            {(hintPool || []).map((m,i)=><li key={i}>{m}</li>)}
           </ul>
         </div>
         <div className="bg-gray-50 rounded-xl p-4">
