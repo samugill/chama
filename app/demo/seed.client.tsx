@@ -1,6 +1,4 @@
-"use client";                          // ← 반드시 최상단
-export const dynamic = "force-dynamic";
-
+"use client";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -8,7 +6,7 @@ import {
   seedDailyLogsForDemo, clearDailyLogs
 } from "@/lib/storage";
 
-export default function DemoSeedPage() {
+export default function DemoSeedInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
