@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { saveProgram } from "@/lib/storage";
+import { saveProgram, getUserPlan } from "@/lib/storage";
 import { makeProgramFromMethods } from "@/lib/schedule";
 import { buildWeeklyPlan, METHOD_POOLS } from "@/lib/ai";
 import { useRouter } from "next/navigation";
@@ -13,9 +13,12 @@ export default function PlanForm() {
   const [strength, setStrength] = useState<1|2|3>(2);
   const [days, setDays] = useState(7);
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0,10));
-  const [customMethods, setCustomMethods] = useState<string>(""); // 줄바꿈으로 사용자 커스텀 풀 입력
+  const [customMethods, setCustomMethods] = useState<string>("");
   const [preview, setPreview] = useState<string[]>([]);
   const router = useRouter();
+
+  const tier = getUserPlan().tier;                       // ← 현재 요금제
+  const maxUnique = tier === "premium" ? 7 : 3;          // ← 고유 방법 제한
 
   // 유혹 선택 시 기본 풀 힌트
   const hintPool = useMemo(() => {
@@ -24,21 +27,22 @@ export default function PlanForm() {
   }, [keyword]);
 
   const genPreview = () => {
-    // 커스텀 풀 입력이 있으면 우선 사용
-    const custom = customMethods
-      .split("\n")
-      .map(s=>s.trim())
-      .filter(Boolean);
-
-    const plan = custom.length >= 2
-      ? takeNLoop(custom, days).map((m,i)=>decorate(m, strength))
-      : buildWeeklyPlan(keyword, days, strength);
-
-    setPreview(plan);
+    const custom = customMethods.split("\n").map(s=>s.trim()).filter(Boolean);
+    if (custom.length >= 2) {
+      // ★ 커스텀 풀도 티어 제한 적용
+      const limited = custom.slice(0, maxUnique).map(m => decorate(m, strength));
+      setPreview(takeNLoop(limited, days));
+    } else {
+      // ★ 기본 추천은 buildWeeklyPlan이 내부에서 티어 제한 처리
+      setPreview(buildWeeklyPlan(keyword, days, strength));
+    }
   };
 
   const onStart = () => {
-    const methods = preview.length ? preview : buildWeeklyPlan(keyword, days, strength);
+    // 미리보기가 있으면 그대로, 없으면 동일 규칙으로 생성
+    let methods = preview.length ? preview : buildWeeklyPlan(keyword, days, strength);
+    // 안전장치: 혹시 preview가 커스텀에서 왔는데 제한이 안 먹었으면 여기서도 한 번 더
+    methods = takeNLoop(methods.slice(0, maxUnique), days);
     const program = makeProgramFromMethods(keyword, time, strength, methods, new Date(startDate));
     saveProgram(program);
     router.push(`/today?program=${program.id}`);
@@ -46,6 +50,11 @@ export default function PlanForm() {
 
   return (
     <div className="card p-6 space-y-4">
+      {/* 현재 요금제 표시 */}
+      <div className="text-xs text-right">
+        현재 요금제: {tier === "premium" ? "💎 Premium" : "Standard"} (고유 방법 {maxUnique}개)
+      </div>
+
       {/* 1) 유혹 입력/선택 */}
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -84,9 +93,15 @@ export default function PlanForm() {
       {/* 3) (선택) 커스텀 방법 풀 */}
       <div>
         <label className="label">커스텀 방법 풀(선택, 줄바꿈으로 여러 개)</label>
-        <textarea className="input h-28" placeholder="예)\n물 500ml 마시기\n배달앱 알림 끄기\n요거트로 대체"
-                  value={customMethods} onChange={e=>setCustomMethods(e.target.value)} />
-        <p className="text-xs text-gray-500 mt-1">입력 시 해당 목록에서 {days}개를 고유/순환으로 편성합니다.</p>
+        <textarea
+          className="input h-28"
+          placeholder={`예)\n물 500ml 마시기\n배달앱 알림 끄기\n요거트로 대체\n\n※ 현재 요금제: 고유 방법 최대 ${maxUnique}개`}
+          value={customMethods}
+          onChange={e=>setCustomMethods(e.target.value)}
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          입력 시 해당 목록에서 최대 {maxUnique}개를 사용해 {days}일 분량으로 순환 편성합니다.
+        </p>
       </div>
 
       {/* 4) 미리보기 & 시작 */}
@@ -124,7 +139,6 @@ function takeNLoop(arr: string[], n: number): string[] {
   return out;
 }
 function decorate(m: string, strength: 1|2|3) {
-  // 강도에 따라 간단 가중(같은 규칙을 intensify와 동일하게)
   if (strength === 1) return m;
   if (strength === 2) return m.replace("30분","45분").replace("15분","20분");
   return m.replace("30분","60분").replace("15분","30분").replace("24시간","48시간");
