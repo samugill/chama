@@ -2,22 +2,24 @@
 
 import { getUserPlan } from "@/lib/storage";
 
+// lib/ai.ts
 export const METHOD_POOLS: Record<string, string[]> = {
-  "야식": [/* ... */],
-  "숏폼": [/* ... */],
-  "게임": [/* ... */],
-  "과소비": [/* ... */],
-  // ★ 반드시 존재해야 함
-  "기본": [
-    "물 마시고 2분 걷기",
-    "포모도로 25분",
-    "방해 알림 모두 끄기",
-    "대체 행동 1개 준비",
-    "시작 선언 메모",
-    "짧은 휴식 후 재개",
-    "주간 회고",
-  ],
+  야식: ["물 500ml 마시기", "배달앱 알림 끄기", "대체 간식(요거트) 준비", "양치하기", "산책 5분", "자기 전 물 1컵", "내일 아침으로 미루기"],
+  숏폼: ["핸드폰 다른 방에 두기 30분", "앱 타이머 15분", "홈화면에서 앱 빼기", "대체 영상(긴 강의) 10분", "디지털 디톡스 30분", "알림 OFF", "충전 꽂고 손 안대기"],
+  게임: ["플레이 시간 30분 제한", "랭크 금지(일반만)", "끝나면 할 일 1개", "친구와 종료 약속", "알림 OFF", "시작 전 목표 메모", "타이머 사용"],
+  과소비: ["장바구니 24시간 보류", "카드 결제 한도 낮추기", "현금만 사용", "위시리스트로 이동", "비교표 만들기", "대체 무료 활동", "구매 이유 적기"],
+  기본: ["물 마시고 2분 걷기", "포모도로 25분", "방해 알림 모두 끄기", "대체 행동 1개 준비", "시작 선언 메모", "짧은 휴식 후 재개", "주간 회고"],
 };
+
+export function pickPool(keyword: string): string[] {
+  const k = (keyword || "").trim().toLowerCase();
+  if (!k) return METHOD_POOLS["기본"];
+  if (k.includes("야식") || k.includes("밤") || k.includes("배달")) return METHOD_POOLS["야식"];
+  if (k.includes("숏폼") || k.includes("틱톡") || k.includes("릴스") || k.includes("short")) return METHOD_POOLS["숏폼"];
+  if (k.includes("게임")) return METHOD_POOLS["게임"];
+  if (k.includes("과소비") || k.includes("쇼핑")) return METHOD_POOLS["과소비"];
+  return METHOD_POOLS["기본"];
+}
 
 export function intensify(m: string, s: 1|2|3): string {
   if (s === 1) return m;
@@ -25,14 +27,6 @@ export function intensify(m: string, s: 1|2|3): string {
   return m.replace("30분","60분").replace("15분","30분").replace("24시간","48시간");
 }
 
-export function pickPool(keyword: string): string[] {
-  const k = (keyword || "").toLowerCase();
-  if (k.includes("야식") || k.includes("밤") || k.includes("배달")) return METHOD_POOLS["야식"];
-  if (k.includes("숏폼") || k.includes("틱톡") || k.includes("릴스") || k.includes("short")) return METHOD_POOLS["숏폼"];
-  if (k.includes("게임")) return METHOD_POOLS["게임"];
-  if (k.includes("과소비") || k.includes("쇼핑")) return METHOD_POOLS["과소비"];
-  return METHOD_POOLS["기본"];
-}
 
 // 안전 보조
 function takeNLoop(arr: string[], n: number): string[] {

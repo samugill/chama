@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { saveProgram, getUserPlan } from "@/lib/storage";
 import { makeProgramFromMethods } from "@/lib/schedule";
-import { buildWeeklyPlan, METHOD_POOLS } from "@/lib/ai";
+import { buildWeeklyPlan, METHOD_POOLS, pickPool } from "@/lib/ai";
 import { useRouter } from "next/navigation";
 
 const PRESETS = ["야식", "숏폼", "게임", "과소비", "기본"] as const;
