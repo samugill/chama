@@ -1,14 +1,17 @@
+// components/Navbar.tsx
 "use client";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getUserPlan, setUserPlan, type UserPlanTier } from "@/lib/storage";
+import { getLastProgramId, getUserPlan, setUserPlan, type UserPlanTier } from "@/lib/storage";
 
 export default function Navbar() {
-  const [tier, setTier] = useState<UserPlanTier>(getUserPlan().tier);
+  const [lastId, setLastId] = useState<string | null>(null);
+  const [tier, setTier] = useState<UserPlanTier>("standard");
 
   useEffect(() => {
-    const i = setInterval(() => setTier(getUserPlan().tier), 500);
-    return () => clearInterval(i);
+    setLastId(getLastProgramId());
+    setTier(getUserPlan().tier);
   }, []);
 
   return (
@@ -19,12 +22,12 @@ export default function Navbar() {
         <nav className="flex gap-4 text-sm">
           <Link href="/pricing">요금제</Link>
           <Link href="/plan">방법 생성</Link>
-          <Link href="/today">오늘</Link>
+          <Link href={lastId ? `/today?program=${lastId}` : "/today"}>오늘</Link>
           <Link href="/trend">추세</Link>
           <Link href="/login">로그인</Link>
         </nav>
 
-        {/* 데모 토글: 제출용으로는 표시만 하고 토글 비활성화해도 됨 */}
+        {/* 제출용: 배지만 표시 (토글 유지하고 싶으면 onClick 그대로 두세요) */}
         <button
           className={`text-xs px-2 py-1 rounded-lg ${tier === "premium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}
           onClick={() => {

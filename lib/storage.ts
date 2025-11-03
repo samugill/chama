@@ -28,6 +28,7 @@ const K = {
   // 프로그램(주간 플랜)용 키들 (이미 쓰고 있다면 유지)
   programs: "chama.programs",
   dailyLogs: "chama.dailyLogs",
+  lastProgramId: "chama.lastProgramId",
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -74,7 +75,14 @@ export function saveRoutine(r: Routine) {
   if (idx >= 0) arr[idx] = r; else arr.unshift(r);
   write(K.routines, arr);
 }
-
+export function setLastProgramId(id: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(K.lastProgramId, id);
+}
+export function getLastProgramId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(K.lastProgramId);
+}
 export function addLog(item: LogItem) {
   const arr = read<LogItem[]>(K.logs, []);
   arr.unshift(item);
@@ -104,6 +112,7 @@ export function saveProgram(p: Program) {
   const idx = arr.findIndex(x => x.id === p.id);
   if (idx >= 0) arr[idx] = p; else arr.unshift(p);
   write(K.programs, arr);
+  setLastProgramId(p.id);
 }
 export function getProgram(id: string): Program | null {
   return getPrograms().find(p => p.id === id) || null;
