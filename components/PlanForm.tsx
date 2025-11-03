@@ -10,7 +10,7 @@ type Tier = "standard" | "premium";
 type Strength = 1 | 2 | 3;
 
 export default function PlanForm() {
-  const [keyword, setKeyword] = useState("야식");
+  const [keyword, setKeyword] = useState(() => localStorage.getItem("chama.lastKeyword") || "");
   const [time, setTime] = useState(30);
   const [strength, setStrength] = useState<Strength>(2);
   const [days, setDays] = useState(7);
