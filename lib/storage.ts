@@ -128,3 +128,55 @@ export function getDailyLogs(programId?: string): DailyLog[] {
   const arr = read<DailyLog[]>(K.dailyLogs, []);
   return programId ? arr.filter(l => l.programId === programId) : arr;
 }
+
+
+
+
+
+
+// lib/storage.ts (하단 아무 데나 추가)
+
+export function seedDailyLogsForDemo(opts: {
+  programId: string;
+  startISO?: string;       // 프로그램 시작일(없으면 프로그램의 startDate 사용)
+  days?: number;           // 기본 7
+  pattern?: ("success"|"fail")[]; // 없으면 successRate로 랜덤
+  successRate?: number;    // 0~1 (기본 0.7)
+}) {
+  const { programId, days = 7 } = opts;
+  const p = getProgram(programId);
+  if (!p) throw new Error("프로그램을 찾을 수 없습니다.");
+
+  const start = new Date(opts.startISO || p.startDate);
+  const successRate = typeof opts.successRate === "number" ? opts.successRate : 0.7;
+
+  // 기존 로그 제거(같은 programId)
+  const prev = getDailyLogs().filter(l => l.programId !== programId);
+
+  const logs: DailyLog[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start.getTime() + i * 86400000);
+    const ts = new Date(
+      d.getFullYear(), d.getMonth(), d.getDate(),
+      21, 0, 0, 0 // 밤 9시쯤 기록으로 고정(영상에서 보기 좋게)
+    ).getTime();
+
+    const status = opts.pattern?.[i] ||
+      (Math.random() < successRate ? "success" : "fail");
+
+    logs.push({ programId, dayIndex: i, ts, status });
+  }
+
+  // 저장
+  if (typeof window !== "undefined") {
+    localStorage.setItem("chama.dailyLogs", JSON.stringify([...logs, ...prev]));
+  }
+}
+
+export function clearDailyLogs(programId?: string) {
+  const all = getDailyLogs();
+  const filtered = programId ? all.filter(l => l.programId !== programId) : [];
+  if (typeof window !== "undefined") {
+    localStorage.setItem("chama.dailyLogs", JSON.stringify(filtered));
+  }
+}
