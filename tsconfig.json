@@ -9,7 +9,6 @@
     "allowJs": false,
     "noEmit": true,
     "resolveJsonModule": true,
-    "types": ["react", "react-dom"],
     "baseUrl": ".",
     "paths": { "@/*": ["./*"] },
     "skipLibCheck": true,
