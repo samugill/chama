@@ -5,67 +5,90 @@ import { makeProgramFromMethods } from "@/lib/schedule";
 import { buildWeeklyPlan, METHOD_POOLS } from "@/lib/ai";
 import { useRouter } from "next/navigation";
 
-const PRESETS = ["야식", "숏폼", "게임", "과소비", "기본"];
+const PRESETS = ["야식", "숏폼", "게임", "과소비", "기본"] as const;
+type Tier = "standard" | "premium";
+type Strength = 1 | 2 | 3;
 
 export default function PlanForm() {
   const [keyword, setKeyword] = useState("야식");
   const [time, setTime] = useState(30);
-  const [strength, setStrength] = useState<1 | 2 | 3>(2);
+  const [strength, setStrength] = useState<Strength>(2);
   const [days, setDays] = useState(7);
   const [startDate, setStartDate] = useState<string>(() =>
     new Date().toISOString().slice(0, 10)
   );
   const [customMethods, setCustomMethods] = useState<string>("");
   const [preview, setPreview] = useState<string[]>([]);
-  const [tier, setTier] = useState<"standard" | "premium">("standard");
+  const [tier, setTier] = useState<Tier>("standard");
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   // 클라이언트 마운트 후 localStorage 접근 (수화 안정)
   useEffect(() => {
-    setTier(getUserPlan().tier);
-    setMounted(true);
+    try {
+      setTier(getUserPlan().tier);
+    } finally {
+      setMounted(true);
+    }
   }, []);
 
   const maxUnique = tier === "premium" ? 7 : 3;
 
-  // 유혹 선택 시 기본 풀 힌트
+  // 유혹 선택 시 기본 풀 힌트 (안전가드 포함)
   const hintPool = useMemo(() => {
-    const key = PRESETS.includes(keyword) ? keyword : "기본";
-    return (METHOD_POOLS?.[key] || METHOD_POOLS?.["기본"] || []);
+    const key = (PRESETS as unknown as string[]).includes(keyword) ? keyword : "기본";
+    return (METHOD_POOLS?.[key] || METHOD_POOLS?.["기본"] || []) as string[];
   }, [keyword]);
 
   const genPreview = () => {
     try {
-      const custom = customMethods.split("\n").map(s => s.trim()).filter(Boolean);
+      // 입력 검증
+      if (!keyword.trim()) throw new Error("유혹(키워드)을 입력해 주세요.");
+      if (!Number.isFinite(days as unknown as number) || days < 1)
+        throw new Error("기간(일) 값이 올바르지 않습니다.");
+
+      const custom = customMethods
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       if (custom.length >= 2) {
-        const limited = custom.slice(0, maxUnique).map(m => decorate(m, strength));
+        // 커스텀 풀도 티어 제한 적용
+        const limited = custom.slice(0, maxUnique).map((m) => decorate(m, strength));
         setPreview(takeNLoop(limited, days));
       } else {
-        setPreview(buildWeeklyPlan(keyword, days, strength)); // 내부에서 티어 제한 적용(Std=3/Prem=7)
+        // 기본 추천은 내부에서 티어 제한(Std=3/Prem=7)
+        setPreview(buildWeeklyPlan(keyword, days, strength));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("미리보기 생성 중 오류가 발생했어요.");
+      alert(`미리보기 오류: ${e?.message || e}`);
     }
   };
 
   const onStart = () => {
     try {
-      let methods = preview.length ? preview : buildWeeklyPlan(keyword, days, strength);
-      methods = takeNLoop(methods.slice(0, maxUnique), days); // 안전장치
+      if (!startDate) throw new Error("시작일을 선택해 주세요.");
+
+      // 미리보기 있으면 사용, 없으면 동일 규칙으로 생성
+      let methods =
+        preview.length > 0 ? preview : buildWeeklyPlan(keyword, days, strength);
+
+      // 안전장치: 혹시라도 미리보기가 제한을 안 탔다면 여기서도 한 번 더
+      methods = takeNLoop(methods.slice(0, maxUnique), days);
+
       const program = makeProgramFromMethods(
         keyword,
-        time,
+        clampInt(time, 5, 180) || 30,
         strength,
         methods,
         new Date(startDate)
       );
       saveProgram(program);
       router.push(`/today?program=${program.id}`);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("프로그램 시작 중 오류가 발생했어요.");
+      alert(`프로그램 시작 오류: ${e?.message || e}`);
     }
   };
 
@@ -87,11 +110,11 @@ export default function PlanForm() {
           <input
             className="input"
             value={keyword}
-            onChange={e => setKeyword(e.target.value)}
+            onChange={(e) => setKeyword(e.target.value)}
             list="tempts"
           />
           <datalist id="tempts">
-            {PRESETS.map(p => (
+            {Array.from(PRESETS).map((p) => (
               <option key={p} value={p} />
             ))}
           </datalist>
@@ -104,9 +127,9 @@ export default function PlanForm() {
             max={3}
             className="input"
             value={strength}
-            onChange={e =>
+            onChange={(e) =>
               setStrength(
-                Math.min(3, Math.max(1, Number(e.target.value) || 2)) as 1 | 2 | 3
+                clampInt(Number(e.target.value) || 2, 1, 3) as Strength
               )
             }
           />
@@ -123,9 +146,7 @@ export default function PlanForm() {
             max={30}
             className="input"
             value={days}
-            onChange={e =>
-              setDays(Math.max(3, Math.min(30, Number(e.target.value) || 7)))
-            }
+            onChange={(e) => setDays(clampInt(Number(e.target.value) || 7, 3, 30))}
           />
         </div>
         <div>
@@ -134,7 +155,7 @@ export default function PlanForm() {
             type="date"
             className="input"
             value={startDate}
-            onChange={e => setStartDate(e.target.value)}
+            onChange={(e) => setStartDate(e.target.value)}
           />
         </div>
         <div>
@@ -145,7 +166,7 @@ export default function PlanForm() {
             max={180}
             className="input"
             value={time}
-            onChange={e => setTime(parseInt(e.target.value || "0") || 30)}
+            onChange={(e) => setTime(clampInt(Number(e.target.value) || 30, 5, 180))}
           />
         </div>
       </div>
@@ -157,7 +178,7 @@ export default function PlanForm() {
           className="input h-28"
           placeholder={`예)\n물 500ml 마시기\n배달앱 알림 끄기\n요거트로 대체\n\n※ 현재 요금제: 고유 방법 최대 ${maxUnique}개`}
           value={customMethods}
-          onChange={e => setCustomMethods(e.target.value)}
+          onChange={(e) => setCustomMethods(e.target.value)}
         />
         <p className="text-xs text-gray-500 mt-1">
           입력 시 해당 목록에서 최대 {maxUnique}개를 사용해 {days}일 분량으로 순환 편성합니다.
@@ -178,7 +199,7 @@ export default function PlanForm() {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-gray-50 rounded-xl p-4">
           <div className="h2 mb-2">
-            추천 힌트({PRESETS.includes(keyword) ? keyword : "기본"})
+            추천 힌트({(PRESETS as unknown as string[]).includes(keyword) ? keyword : "기본"})
           </div>
           <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
             {(hintPool || []).map((m, i) => (
@@ -205,15 +226,19 @@ export default function PlanForm() {
 
 /* 보조 함수 */
 function takeNLoop(arr: string[], n: number): string[] {
+  const src = Array.isArray(arr) && arr.length ? arr : ["시작 선언 메모"];
   const out: string[] = [];
   let i = 0;
   while (out.length < n) {
-    out.push(arr[i % arr.length]);
+    out.push(src[i % src.length]);
     i++;
   }
   return out;
 }
-function decorate(m: string, strength: 1 | 2 | 3) {
+function clampInt(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(v)));
+}
+function decorate(m: string, strength: Strength) {
   if (strength === 1) return m;
   if (strength === 2) return m.replace("30분", "45분").replace("15분", "20분");
   return m
