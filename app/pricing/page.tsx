@@ -7,7 +7,7 @@ export default function PricingPage() {
       <h1 className="h1">요금제</h1>
       <PricingCards />
       <p className="text-gray-500 text-sm">
-        목표를 모두 달성하면 Premium 결제는 전액 환불됩니다. (MVP: 데모 처리)
+        목표를 모두 달성하면 Premium 결제는 전액 환불됩니다.
       </p>
     </div>
   );
