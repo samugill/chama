@@ -32,3 +32,9 @@ html,body{ height:100%; background:var(--bg); color:var(--fg);}
 
 /* iOS 기본 외형 차이 최소화 */
 .input { -webkit-appearance: none; appearance: none; }
+
+input[type="date"] {
+  background-color: white;
+  color: #111;
+}
+input[type="date"] { background:#fff; color:#111; }

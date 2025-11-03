@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { saveProgram, getUserPlan } from "@/lib/storage";
 import { makeProgramFromMethods } from "@/lib/schedule";
-import { buildWeeklyPlan, METHOD_POOLS, pickPool } from "@/lib/ai";
+import { buildWeeklyPlan, METHOD_POOLS } from "@/lib/ai";
 import { useRouter } from "next/navigation";
 
 const PRESETS = ["야식", "숏폼", "게임", "과소비", "기본"] as const;
@@ -11,9 +11,16 @@ type Strength = 1 | 2 | 3;
 
 export default function PlanForm() {
   const [keyword, setKeyword] = useState(() => localStorage.getItem("chama.lastKeyword") || "");
-  const [time, setTime] = useState(30);
-  const [strength, setStrength] = useState<Strength>(2);
-  const [days, setDays] = useState(7);
+
+  // ⬇︎ 숫자는 입력 중에 고정되지 않도록 문자열 상태 + 파생 숫자 사용
+  const [timeText, setTimeText] = useState("30");
+  const [strengthText, setStrengthText] = useState("2");
+  const [daysText, setDaysText] = useState("7");
+
+  const strength = clamp(intOr(strengthText, 2), 1, 3) as Strength;
+  const days = clamp(intOr(daysText, 7), 3, 30);
+  const time = clamp(intOr(timeText, 30), 5, 180);
+
   const [startDate, setStartDate] = useState<string>(() =>
     new Date().toISOString().slice(0, 10)
   );
@@ -23,7 +30,6 @@ export default function PlanForm() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
-  // 클라이언트 마운트 후 localStorage 접근 (수화 안정)
   useEffect(() => {
     try {
       setTier(getUserPlan().tier);
@@ -32,9 +38,14 @@ export default function PlanForm() {
     }
   }, []);
 
+  // 키워드 자동 저장
+  useEffect(() => {
+    try { localStorage.setItem("chama.lastKeyword", keyword); } catch {}
+  }, [keyword]);
+
   const maxUnique = tier === "premium" ? 7 : 3;
 
-  // 유혹 선택 시 기본 풀 힌트 (안전가드 포함)
+  // 유혹 선택 시 기본 풀 힌트
   const hintPool = useMemo(() => {
     const key = (PRESETS as unknown as string[]).includes(keyword) ? keyword : "기본";
     return (METHOD_POOLS?.[key] || METHOD_POOLS?.["기본"] || []) as string[];
@@ -42,7 +53,6 @@ export default function PlanForm() {
 
   const genPreview = () => {
     try {
-      // 입력 검증
       if (!keyword.trim()) throw new Error("유혹(키워드)을 입력해 주세요.");
       if (!Number.isFinite(days as unknown as number) || days < 1)
         throw new Error("기간(일) 값이 올바르지 않습니다.");
@@ -53,11 +63,9 @@ export default function PlanForm() {
         .filter(Boolean);
 
       if (custom.length >= 2) {
-        // 커스텀 풀도 티어 제한 적용
         const limited = custom.slice(0, maxUnique).map((m) => decorate(m, strength));
         setPreview(takeNLoop(limited, days));
       } else {
-        // 기본 추천은 내부에서 티어 제한(Std=3/Prem=7)
         setPreview(buildWeeklyPlan(keyword, days, strength));
       }
     } catch (e: any) {
@@ -70,17 +78,14 @@ export default function PlanForm() {
     try {
       if (!startDate) throw new Error("시작일을 선택해 주세요.");
 
-      // 미리보기 있으면 사용, 없으면 동일 규칙으로 생성
       let methods =
         preview.length > 0 ? preview : buildWeeklyPlan(keyword, days, strength);
-
-      // 안전장치: 혹시라도 미리보기가 제한을 안 탔다면 여기서도 한 번 더
       methods = takeNLoop(methods.slice(0, maxUnique), days);
 
       const program = makeProgramFromMethods(
         keyword,
-        clampInt(time, 5, 180) || 30,
-        strength,
+        clampInt(time, 5, 180) || 30, // ← 파생 숫자 time 사용
+        strength,                      // ← 파생 숫자 strength 사용
         methods,
         new Date(startDate)
       );
@@ -98,13 +103,12 @@ export default function PlanForm() {
 
   return (
     <div className="card p-6 space-y-4">
-      {/* 현재 요금제 표시 */}
       <div className="text-xs text-right">
         현재 요금제: {tier === "premium" ? "💎 Premium" : "Standard"} (고유 방법 {maxUnique}개)
       </div>
 
       {/* 1) 유혹 입력/선택 */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">유혹(키워드)</label>
           <input
@@ -123,30 +127,30 @@ export default function PlanForm() {
           <label className="label">강도(1~3)</label>
           <input
             type="number"
+            inputMode="numeric"
             min={1}
             max={3}
             className="input"
-            value={strength}
-            onChange={(e) =>
-              setStrength(
-                clampInt(Number(e.target.value) || 2, 1, 3) as Strength
-              )
-            }
+            value={strengthText}
+            onChange={(e) => setStrengthText(e.target.value)}
+            onBlur={() => setStrengthText(String(strength))}
           />
         </div>
       </div>
 
       {/* 2) 기간/시작일/시간 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label className="label">기간(일)</label>
           <input
             type="number"
+            inputMode="numeric"
             min={3}
             max={30}
             className="input"
-            value={days}
-            onChange={(e) => setDays(clampInt(Number(e.target.value) || 7, 3, 30))}
+            value={daysText}
+            onChange={(e) => setDaysText(e.target.value)}
+            onBlur={() => setDaysText(String(days))}
           />
         </div>
         <div>
@@ -162,11 +166,13 @@ export default function PlanForm() {
           <label className="label">권장 시간(분)</label>
           <input
             type="number"
+            inputMode="numeric"
             min={5}
             max={180}
             className="input"
-            value={time}
-            onChange={(e) => setTime(clampInt(Number(e.target.value) || 30, 5, 180))}
+            value={timeText}
+            onChange={(e) => setTimeText(e.target.value)}
+            onBlur={() => setTimeText(String(time))}
           />
         </div>
       </div>
@@ -196,7 +202,7 @@ export default function PlanForm() {
       </div>
 
       {/* 5) 힌트 풀 & 미리보기 그리드 */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="bg-gray-50 rounded-xl p-4">
           <div className="h2 mb-2">
             추천 힌트({(PRESETS as unknown as string[]).includes(keyword) ? keyword : "기본"})
@@ -237,6 +243,13 @@ function takeNLoop(arr: string[], n: number): string[] {
 }
 function clampInt(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(v)));
+}
+function intOr(s: string, d: number) {
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : d;
+}
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
 function decorate(m: string, strength: Strength) {
   if (strength === 1) return m;
