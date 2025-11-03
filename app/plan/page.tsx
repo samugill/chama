@@ -1,12 +1,13 @@
-"use client";
-import PlanForm from "@/components/PlanForm";
+// app/plan/page.tsx
 export const dynamic = "force-dynamic";
+
+import { Suspense } from "react";
+import PlanForm from "@/components/PlanForm";
 
 export default function PlanPage() {
   return (
-    <div className="space-y-6">
-      <h1 className="h1">방법 생성</h1>
+    <Suspense fallback={<div className="card p-6">불러오는 중…</div>}>
       <PlanForm />
-    </div>
+    </Suspense>
   );
 }
