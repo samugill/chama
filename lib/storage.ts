@@ -1,3 +1,5 @@
+// lib/storage.ts  (전체 교체본)
+
 export type Routine = {
   id: string;
   title: string;
@@ -14,11 +16,18 @@ export type LogItem = {
   status: "success" | "fail";
 };
 
+// --- 요금제(추가) ---
+export type UserPlanTier = "standard" | "premium";
+export type UserPlan = { tier: UserPlanTier };
+
 const K = {
   plan: "chama.plan",
   draft: "chama.draft",
   routines: "chama.routines",
   logs: "chama.logs",
+  // 프로그램(주간 플랜)용 키들 (이미 쓰고 있다면 유지)
+  programs: "chama.programs",
+  dailyLogs: "chama.dailyLogs",
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -35,101 +44,78 @@ function write<T>(key: string, v: T) {
   localStorage.setItem(key, JSON.stringify(v));
 }
 
-// 요금제
-export function getPlan(): "standard" | "premium" {
-  return read(K.plan, "standard");
+// === 요금제 API ===
+export function getUserPlan(): UserPlan {
+  return read<UserPlan>(K.plan, { tier: "standard" });
 }
-export function setPlan(p: "standard" | "premium") {
-  write(K.plan, p);
-}
-
-// 드래프트(방금 생성한 결과 임시 저장)
-export function saveDraft(r: Routine) {
-  write(K.draft, r);
-}
-export function getDraft(): Routine | null {
-  return read< Routine | null >(K.draft, null);
+export function setUserPlan(tier: UserPlanTier) {
+  write<UserPlan>(K.plan, { tier });
 }
 
-// 루틴 목록
-export function getRoutines(): Routine[] {
-  return read<Routine[]>(K.routines, []);
-}
+// === 드래프트/루틴/로그(기존) ===
+export function saveDraft(r: Routine) { write(K.draft, r); }
+export function getDraft(): Routine | null { return read<Routine | null>(K.draft, null); }
+
+export function getRoutines(): Routine[] { return read<Routine[]>(K.routines, []); }
+
+// ★ 요금제 제한 적용: Standard는 루틴 1개만 저장
 export function saveRoutine(r: Routine) {
+  const tier = getUserPlan().tier;
   const arr = getRoutines();
-  const idx = arr.findIndex((x) => x.id === r.id);
+  if (tier === "standard") {
+    // 이미 1개가 있으면 막기
+    const has = arr.length >= 1 && !arr.find(x => x.id === r.id);
+    if (has) {
+      alert("Standard 요금제에서는 루틴을 1개만 저장할 수 있습니다. Premium으로 업그레이드해주세요!");
+      return;
+    }
+  }
+  const idx = arr.findIndex(x => x.id === r.id);
   if (idx >= 0) arr[idx] = r; else arr.unshift(r);
   write(K.routines, arr);
 }
-export function importRoutine(r: Routine) {
-  saveRoutine(r);
-  saveDraft(r);
-}
 
-// 로그(추세)
 export function addLog(item: LogItem) {
   const arr = read<LogItem[]>(K.logs, []);
   arr.unshift(item);
   write(K.logs, arr);
 }
-export function getLogs(): LogItem[] {
-  return read<LogItem[]>(K.logs, []);
-}
-// --- NEW TYPES ---
-export type DayTask = {
-  dayIndex: number;        // 0~6 (시작일 기준 D+0..D+6)
-  label: string;           // 월/화/... 또는 Day 1
-  method: string;          // 오늘 실천할 방법
-};
+export function getLogs(): LogItem[] { return read<LogItem[]>(K.logs, []); }
 
+// === 프로그램/일일로그(사용 중이면 그대로) ===
+export type DayTask = { dayIndex: number; label: string; method: string; };
 export type Program = {
-  id: string;
-  keyword: string;
-  title: string;           // 예: 야식 유혹 7일 프로그램
-  minutes: number;         // 권장 타이머(분)
-  strength: 1|2|3;
-  startDate: string;       // yyyy-mm-dd
-  days: DayTask[];         // 7개
-  createdAt: number;
-  finishedAt?: number;
+  id: string; keyword: string; title: string; minutes: number; strength: 1|2|3;
+  startDate: string; days: DayTask[]; createdAt: number; finishedAt?: number;
 };
+export type DailyLog = { programId: string; dayIndex: number; ts: number; status: "success"|"fail" };
 
-export type DailyLog = {
-  programId: string;
-  dayIndex: number;
-  ts: number;
-  status: "success"|"fail";
-};
-
-// --- NEW KEYS ---
-const K2 = {
-  programs: "chama.programs",
-  dailyLogs: "chama.dailyLogs",
-};
-
-// --- PROGRAM CRUD ---
-export function getPrograms(): Program[] {
-  return read<Program[]>(K2.programs, []);
-}
+export function getPrograms(): Program[] { return read<Program[]>(K.programs, []); }
 export function saveProgram(p: Program) {
+  const tier = getUserPlan().tier;
   const arr = getPrograms();
+  if (tier === "standard") {
+    const creatingNew = !arr.find(x => x.id === p.id);
+    if (creatingNew && arr.length >= 1) {
+      alert("Standard 요금제에서는 프로그램을 1개만 생성할 수 있습니다. Premium으로 업그레이드해주세요!");
+      return;
+    }
+  }
   const idx = arr.findIndex(x => x.id === p.id);
   if (idx >= 0) arr[idx] = p; else arr.unshift(p);
-  write(K2.programs, arr);
+  write(K.programs, arr);
 }
 export function getProgram(id: string): Program | null {
   return getPrograms().find(p => p.id === id) || null;
 }
 
-// --- DAILY LOG ---
 export function addDailyLog(log: DailyLog) {
-  const arr = read<DailyLog[]>(K2.dailyLogs, []);
-  // 중복 기록 방지: 같은 programId+dayIndex 최근 것만 유지
-  const filtered = arr.filter(l => !(l.programId===log.programId && l.dayIndex===log.dayIndex));
+  const arr = read<DailyLog[]>(K.dailyLogs, []);
+  const filtered = arr.filter(l => !(l.programId === log.programId && l.dayIndex === log.dayIndex));
   filtered.unshift(log);
-  write(K2.dailyLogs, filtered);
+  write(K.dailyLogs, filtered);
 }
 export function getDailyLogs(programId?: string): DailyLog[] {
-  const arr = read<DailyLog[]>(K2.dailyLogs, []);
+  const arr = read<DailyLog[]>(K.dailyLogs, []);
   return programId ? arr.filter(l => l.programId === programId) : arr;
 }

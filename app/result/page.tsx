@@ -3,7 +3,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ResultCard from "@/components/ResultCard";
 import { decodeShare } from "@/lib/share";
-import { importRoutine } from "@/lib/storage";
+import { saveRoutine } from "@/lib/storage";
 
 export const dynamic = "force-dynamic"; // 정적 프리렌더 회피(로컬스토리지/URL 의존)
 
@@ -33,7 +33,7 @@ function ResultInner() {
       steps: incoming.steps,
       createdAt: Date.now(),
     };
-    importRoutine(r);
+    saveRoutine(r);
     setImportMsg("가져오기 완료! 내 결과 카드에 반영됐어요.");
   };
 
